@@ -1,0 +1,300 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import matplotlib.pyplot as plt\n",
+    "import numpy as np\n",
+    "from numpy.linalg import inv\n",
+    "import os\n",
+    "import math\n",
+    "import pandas\n",
+    "import scipy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Enter the number of samples\n",
+      "4\n",
+      "Enter the number of dimensions\n",
+      "4\n"
+     ]
+    }
+   ],
+   "source": [
+    "def meanColumn(a): # function used in centralizeColumn\n",
+    "    '''finding the mean of X to centralize'''\n",
+    "    (row,column)=np.shape(a)\n",
+    "    mean=[]\n",
+    "    for i in range (0,column):\n",
+    "        temp=0\n",
+    "        for j in range(0,row):\n",
+    "            temp+=a[j][i]\n",
+    "        mean.append(temp/row)\n",
+    "    return mean #1x(column)\n",
+    "\n",
+    "def sdColumn(a): # function used in centralizedColumn\n",
+    "    '''finding the sd of X to centralize'''\n",
+    "    (row,column)=np.shape(a)\n",
+    "    sd=[]\n",
+    "    for j in range(0,column):\n",
+    "        sd.append(np.std(np.array(a)[:,j]))\n",
+    "    return sd #1xcolumn\n",
+    "\n",
+    "def centralizeColumn(a): # input is X\n",
+    "    '''centralizing the values in a matrix'''\n",
+    "    (row,column)=np.shape(a)\n",
+    "    mean=meanColumn(a)\n",
+    "    sd=sdColumn(a)\n",
+    "    newMean=[]\n",
+    "    newSD=[]\n",
+    "    for i in range(0,row):\n",
+    "        newMean.append(mean)\n",
+    "        newSD.append(sd)\n",
+    "    centralized=np.zeros((row,column))\n",
+    "    for i in range(0,row):\n",
+    "        for j in range(0,column):\n",
+    "            centralized[i][j]=((a[i][j]-newMean[i][j])/newSD[i][j])\n",
+    "    return centralized\n",
+    "\n",
+    "def attach(attachX): # input is centralized X\n",
+    "    '''attaching ones to the first column'''\n",
+    "    (N,d)=np.shape(attachX)\n",
+    "    tempX=np.ones((N,1))\n",
+    "    attachedX=np.concatenate((tempX,attachX),axis=1)\n",
+    "    return attachedX\n",
+    "\n",
+    "'''define X,Y,and D and refining X'''\n",
+    "N=int(input('Enter the number of samples\\n'))\n",
+    "d=int(input('Enter the number of dimensions\\n'))\n",
+    "q=1\n",
+    "X=np.random.rand(N,d)\n",
+    "Y=np.random.rand(N,q)\n",
+    "D=np.random.rand(d+1,d+1)\n",
+    "X=centralizeColumn(X)\n",
+    "X=attach(X)\n",
+    "#Lambda=??\n",
+    "#rho=1/Lambda\n",
+    "\n",
+    "theLambda=np.arange(1,301,1)\n",
+    "theLambda=np.square(theLambda)\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def shrinkageOperator(shrinkV,shrinkLambda,shrinkRho): # function used in ADMM\n",
+    "    '''defining the shrinkage operator'''\n",
+    "    if shrinkV>=shrinkLambda*shrinkRho:\n",
+    "        shrinkValue=shrinkV-(shrinkLambda*shrinkRho)\n",
+    "    elif shrinkV==shrinkLambda*shrinkRho:\n",
+    "        shrinkValue=0\n",
+    "    elif shrinkV<=shrinkLambda*shrinkRho:\n",
+    "        shrinkValue=shrinkV+(shrinkLambda*shrinkRho)\n",
+    "    return shrinkValue\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def ADMM(admmX,admmY,admmGamma,admmTau,admmLambda,admmRho,admmD,N=N,d=d): # function used in ADMMiteration\n",
+    "    '''defining beta'''\n",
+    "    toBeInversed=np.matmul(admmX.T,admmX)+(np.multiply((1/(2*admmRho)),np.matmul(admmD.T,admmD))) # (d+1)x(d+1)\n",
+    "    toMultiply_beta=np.linalg.inv(toBeInversed) #(d+1)x(d+1)\n",
+    "    subtracted=np.subtract(admmGamma,admmTau) #(d+1)x1\n",
+    "    toMultiplyAgain_beta=np.matmul(admmX.T,admmY)+np.multiply((1/(2*admmRho)),(np.matmul(admmD.T,subtracted)))#(d+1)x1\n",
+    "    newBeta=np.matmul(toMultiply_beta,toMultiplyAgain_beta) #(d+1)x1\n",
+    "    \n",
+    "    '''defining gamma'''\n",
+    "    DB=np.matmul(admmD,newBeta) #(d+1)x1\n",
+    "    newGamma=np.zeros(((d+1),1))\n",
+    "    for i in range(0,d+1):\n",
+    "        shrinkageInput=DB[i]+admmTau[i]\n",
+    "        newGamma[i]=shrinkageOperator(shrinkageInput,admmLambda,admmRho)\n",
+    "        \n",
+    "    '''defining tau'''\n",
+    "    newTau=DB\n",
+    "    newTau=np.subtract(np.add(admmTau,DB),newGamma)\n",
+    "    \n",
+    "    return newBeta,newGamma,newTau\n",
+    "\n",
+    "Beta,Gamma,Tau=ADMM(X,Y,np.random.rand((d+1),1),np.random.rand((d+1),1),3,2,np.random.rand(d+1,d+1))\n",
+    "Beta2,Gamma2,Tau2=ADMM(X,Y,Gamma,Tau,3,2,np.random.rand(d+1,d+1))\n",
+    "Beta3,Gamma3,Tau3=ADMM(X,Y,Gamma2,Tau2,3,2,np.random.rand(d+1,d+1))\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def ADMMiteration(iterX,iterY,iterLambda,iterRho,iterD,N=N,d=d,iterNum=10000): # inputs: attachedX, Y, Lambda, Rho, D\n",
+    "    flag=0\n",
+    "    allTau=[]\n",
+    "    allBeta=[]\n",
+    "    allGamma=[]\n",
+    "\n",
+    "    initialTau=np.random.rand((d+1),1)\n",
+    "    initialGamma=np.random.rand((d+1),1)\n",
+    "    initialBeta,e,w=ADMM(iterX,iterY,initialGamma,initialTau,iterLambda,iterRho,iterD)\n",
+    "    \n",
+    "    allTau.append(initialTau)\n",
+    "    allGamma.append(initialGamma)\n",
+    "    allBeta.append(initialBeta)\n",
+    " \n",
+    "    i=1\n",
+    "    while True:\n",
+    "        tempBeta,tempGamma,tempTau=ADMM(iterX,iterY,allGamma[i-1],allTau[i-1],iterLambda,iterRho,iterD)\n",
+    "        allTau.append(tempTau)\n",
+    "        allGamma.append(tempGamma)\n",
+    "        allBeta.append(tempBeta)\n",
+    "\n",
+    "\n",
+    "        errorTau=np.abs(np.subtract(allTau[i],allTau[i-1]))\n",
+    "        errorBeta=np.abs(np.subtract(allBeta[i],allBeta[i-1]))\n",
+    "        errorGamma=np.abs(np.subtract(allGamma[i],allGamma[i-1]))\n",
+    "        \n",
+    "        i+=1\n",
+    "        \n",
+    "        #if any(errorTau)<10**(10) or any(errorGamma)<10**(10) or any(errorBeta)<10**(10):\n",
+    "        #    flag=0\n",
+    "        #else:\n",
+    "        #    flag=1\n",
+    "            \n",
+    "        if i==iterNum:\n",
+    "            break\n",
+    "        \n",
+    "    return allBeta[1:],allGamma[1:],allTau[1:]\n",
+    "\n",
+    "    \n",
+    "iteratedBeta,iteratedGamma,iteratedTau=ADMMiteration(X,Y,3,2,np.random.rand((d+1),(d+1)))   "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def truncateBeta(truncBeta): # input: the last value of beta obtained from ADMMiteration\n",
+    "    for i in range(len(truncBeta)):\n",
+    "        if abs(truncBeta[i])<10**(-5):\n",
+    "            truncBeta[i]=0\n",
+    "    return truncBeta \n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'before proceeding next, define theLambda and find the values of beta for all those lambda values'"
+      ]
+     },
+     "execution_count": 9,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "def returnCoordinates(returnBeta): # input: the latest iterated beta value after truncation\n",
+    "    coordinates=[]\n",
+    "    for j in range(0,len(returnBeta)):\n",
+    "        if returnBeta[j]!=0:\n",
+    "            coordinates.append(j+1)\n",
+    "    print ('the non-vanishing coordinates are:\\n' )\n",
+    "    print (coordinates)\n",
+    "    return coordinates # output: the coordinates for which beta is not zero\n",
+    "\n",
+    "meanForY=np.multiply(X.T,iteratedBeta[-1]) \n",
+    "\n",
+    "'''before proceeding next, define theLambda and find the values of beta for all those lambda values''' "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "'''plots for the question'''\n",
+    "def nonVanishingCoeff(recoverLambdaB=lambdaB): # input: the big array which has the b values for all lambda values\n",
+    "    toPlot=[]\n",
+    "    for k in range(0,len(recoverLambdaB)):\n",
+    "        w=0\n",
+    "        for j in range(0,len(recoverLambdaB[0])):\n",
+    "            if recoverLambdaB[k][j]!=0:\n",
+    "                w+=1\n",
+    "    toPlot.append(w)   #output: number of non-vanishing elements in b==> to plot against lambda \n",
+    "    return toPlot\n",
+    "    \n",
+    "def plotB(jValue,LambdaB=lambdaB): # input: the big array which has b values for all lambda values and j=21,36,200\n",
+    "    toBePlotted=[]\n",
+    "    for k in range(0,len(LambdaB)):\n",
+    "        toBePlotted.append(LambdaB[k][j]) # plot against lambda\n",
+    "        \n",
+    "    return toBePlotted\n",
+    "\n",
+    "def increment(j,LambdaB=lambdaB,TheLambda=theLambda): # input: the big array of b and j=21,36,200\n",
+    "    toPlot=[]\n",
+    "    for k in range(0,len(LambdaB)-1):\n",
+    "        temp=LambdaB[k+1][j]-Lambda[k][j]\n",
+    "        temp1=theLambda[k+1]-thelambda[k]\n",
+    "        temp3=temp/temp1\n",
+    "        toPlot.append(temp3) # note that this is one element less than that of theLambda"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.4"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}

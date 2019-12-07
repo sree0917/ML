@@ -1,0 +1,360 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Enter the number of classes\n",
+      "4\n",
+      "Enter the number of samples\n",
+      "500\n",
+      "Enter the number of dimensions\n",
+      "7\n"
+     ]
+    }
+   ],
+   "source": [
+    "import matplotlib.pyplot as plt\n",
+    "import numpy as np\n",
+    "from sklearn import datasets\n",
+    "\n",
+    "# defining variables to test the function\n",
+    "q_data=int(input('Enter the number of classes\\n'))\n",
+    "r_data=q_data-1\n",
+    "N_data=int(input('Enter the number of samples\\n'))\n",
+    "d_data=int(input('Enter the number of dimensions\\n'))\n",
+    "#defining dataset and labels\n",
+    "X_data,y_data=datasets.make_blobs(n_samples=N_data,n_features=d_data,centers=q_data)\n",
+    "y_data+=1\n",
+    "\n",
+    "def meanX(X): # X is an Nxd (or N_ixd) matrix\n",
+    "    # finding the mean over the samples in the array given as input\n",
+    "    X=np.array(X)\n",
+    "    mean=[]\n",
+    "    (N,d)=np.shape(X)\n",
+    "    for i in range(0,d):\n",
+    "        temp=((np.sum(X[:,i]))/N)\n",
+    "        mean.append([temp])\n",
+    "    return mean # dx1 matrix\n",
+    "\n",
+    "def separateClass(X,y):\n",
+    "    # separates the main array into classes so that the length of this array\n",
+    "    #will be the number of classes, shape of each element in this array will \n",
+    "    #be (N_i,d) where N_i is the number of samples in  i^th class\n",
+    "    (N,d)=np.shape(X)\n",
+    "    q=np.max(y)-np.min(y)+1 # the number of classes\n",
+    "    x_separated=[]\n",
+    "    for i  in range(0,q):\n",
+    "        x_separated.append([])\n",
+    "    for c in range(1,q+1):\n",
+    "        for i in range(0,N):\n",
+    "            if y[i]==c:\n",
+    "                x_separated[c-1].append(X[i])\n",
+    "    return x_separated\n",
+    "\n",
+    "def meanDiff(X,y):\n",
+    "    #gets the matrix (mu_g-mu)\n",
+    "    X=np.array(X)\n",
+    "    (N,d)=np.shape(X)\n",
+    "    q=np.max(y)-np.min(y)+1\n",
+    "    x_separated=separateClass(X,y)\n",
+    "    theMean=meanX(X)\n",
+    "    theMean=np.array(theMean).T[0]\n",
+    "    means=[] # to collect the mean for each class\n",
+    "    for i in range(0,q):\n",
+    "        temp=np.array(meanX(x_separated[i])).T\n",
+    "        means.append(temp[0])\n",
+    "    meanDifference=means-theMean\n",
+    "    xMeanDifference=np.array(X)-theMean\n",
+    "        \n",
+    "    return meanDifference.T,xMeanDifference.T # shapes (d,q), (d,N) ==> this will go as the input for finding the gamma values\n",
+    "    \n",
+    "def withinClassScatter(X,y): # input: x_separated\n",
+    "    (N,d)=np.shape(X)\n",
+    "    q=np.max(y)-np.min(y)+1\n",
+    "    x_separated=separateClass(X,y)\n",
+    "    withinScatter=np.zeros((d,d))\n",
+    "    for i in range(0,q):\n",
+    "        x_separated[i]=np.array(x_separated[i]) # 1xd matrix\n",
+    "        temp=x_separated[i].T # dx1 matrix\n",
+    "        temp1=meanX(x_separated[i]) #dx1 matrix\n",
+    "        temp2=np.subtract(temp,temp1)\n",
+    "        temp3=np.matmul(temp2,temp2.T) # dxd matrix\n",
+    "        withinScatter+=temp3\n",
+    "    return withinScatter/N\n",
+    "\n",
+    "def betweenClassScatter(X,y):\n",
+    "    (N,d)=np.shape(X)\n",
+    "    q=np.max(y)-np.min(y)+1\n",
+    "    x_separated=separateClass(X,y)\n",
+    "    x_mean=meanX(X) # dx1 matrix\n",
+    "    x_separatedMeans=[]\n",
+    "    theCount=[]\n",
+    "    betweenScatter=np.zeros((d,d))\n",
+    "    for i in range(0,q):\n",
+    "        count=0\n",
+    "        x_separatedMeans.append(meanX(x_separated[i])) # this will be a matrix with length q when the for loop ends\n",
+    "        for j in range(0,len(x_separated[i])):\n",
+    "            count+=1\n",
+    "        theCount.append(count) # array that has the number of elements of each class\n",
+    "    \n",
+    "    for i in range(0,q):\n",
+    "        temp=np.subtract(x_separatedMeans[i],x_mean)\n",
+    "        temp2=np.matmul(temp,temp.T)\n",
+    "        betweenScatter+=temp2\n",
+    "    return betweenScatter/N # dxd matrix\n",
+    "\n",
+    "\n",
+    "def LDATrain(X,y):\n",
+    "    (N,d)=np.shape(X)\n",
+    "    globalAverage=meanX(X)\n",
+    "    q=np.max(y)-np.min(y)+1\n",
+    "    r=q-1\n",
+    "    withinScatter=withinClassScatter(X,y)\n",
+    "    betweenScatter=betweenClassScatter(X,y)\n",
+    "    temp=np.linalg.inv(withinScatter)\n",
+    "    temp1=np.matmul(temp,betweenScatter)\n",
+    "    tempWeight,tempVec=np.linalg.eig(temp1) # tempVec[:,i] is the eigenvector for tempWeight[i]\n",
+    "    # sorting step\n",
+    "    tempWeightSorted=sorted(tempWeight,reverse=True)\n",
+    "    tempVector=tempVec.T\n",
+    "    tempVecSorted=[]\n",
+    "    for i in range(0,len(tempWeight)):\n",
+    "        for j in range(0,len(tempWeight)):\n",
+    "            if tempWeightSorted[i]==tempWeight[j]:\n",
+    "                tempVecSorted.append(tempVector[j])\n",
+    "    eigenVectors=tempVecSorted[0:r] # first r eigen vectors\n",
+    "    eigenVectors=np.array(eigenVectors).T \n",
+    "    # computing (mu_g-mu).T x e_j\n",
+    "    difference,x_difference=meanDiff(X,y) # dxq and dxN\n",
+    "    difference=np.array(difference).T\n",
+    "    x_difference=np.array(x_difference).T\n",
+    "    m_c=[] # here the first row (for both xm_c and m_c) will have the multiplication by the first eigen vector, second will have that by the second vector, and so on    \n",
+    "    for i in range(0,r):\n",
+    "        m_c.append([])\n",
+    "        for g in range(0,q):\n",
+    "            temp3=np.matmul(difference[g],eigenVectors.T[i])\n",
+    "            m_c[i].append(temp3)\n",
+    "        #m_c=np.matmul(difference.T,eigenVectors)\n",
+    "    \n",
+    "    return eigenVectors,globalAverage,m_c # dxr ,dx1, rxq, rxN\n",
+    "\n",
+    "\n",
+    "def LDAClassify(X,y,X_test,y_test):\n",
+    "    predictedY=[]\n",
+    "    (N,d)=np.shape(X)\n",
+    "    (N_test,d_test)=np.shape(X_test)\n",
+    "    q=np.max(y)-np.min(y)+1\n",
+    "    r=q-1\n",
+    "    x_separated=separateClass(X,y)\n",
+    "    eigenVectors,globalAverage,m_c=LDATrain(X,y)\n",
+    "    pred=[]\n",
+    "    xm_c=[]\n",
+    "    difference,x_difference=meanDiff(X_test,y_test) # dxq and dxN\n",
+    "    difference=np.array(difference).T\n",
+    "    x_difference=np.array(x_difference).T\n",
+    "    for i in range(0,r):\n",
+    "        xm_c.append([])\n",
+    "        for j in range(0,N_test):\n",
+    "            temp2=np.matmul(x_difference[j],eigenVectors.T[i])\n",
+    "            xm_c[i].append(temp2) # xm_c is now an rxN matrix\n",
+    "    for i in range(0,N_test):\n",
+    "        toPred=[]\n",
+    "        for g in range(0,q):\n",
+    "            pi=len(x_separated[g]) # getting the value of pi\n",
+    "            temp=0\n",
+    "            temp1=0\n",
+    "            for j in range(0,r):\n",
+    "                temp+=xm_c[j][i]*m_c[j][g]\n",
+    "                temp1+=m_c[j][g]**2\n",
+    "            temp1/=2\n",
+    "            temp2=temp-temp1+np.log(pi)\n",
+    "            toPred.append(temp2)\n",
+    "        ind=np.argmax(toPred)\n",
+    "        pred.append(ind)\n",
+    "    return np.array(pred)+1           \n",
+    "\n",
+    "predictedY=LDAClassify(X_data,y_data,X_data,y_data)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "array([4, 2, 2, 2, 3, 1, 3, 3, 2, 3, 4, 3, 1, 2, 1, 2, 1, 3, 4, 2, 1, 2,\n",
+       "       1, 1, 3, 3, 1, 4, 4, 1, 3, 3, 1, 4, 1, 2, 3, 1, 1, 3, 1, 2, 3, 3,\n",
+       "       3, 4, 3, 2, 3, 1, 2, 3, 3, 2, 2, 2, 4, 2, 3, 1, 3, 2, 3, 3, 2, 3,\n",
+       "       2, 2, 2, 4, 2, 3, 4, 4, 4, 3, 4, 1, 2, 3, 3, 2, 4, 3, 4, 3, 2, 4,\n",
+       "       2, 2, 2, 4, 2, 3, 1, 4, 3, 2, 1, 3, 3, 1, 1, 4, 1, 4, 4, 1, 3, 2,\n",
+       "       4, 1, 4, 3, 4, 1, 4, 2, 1, 1, 1, 1, 4, 1, 2, 3, 1, 2, 1, 4, 4, 4,\n",
+       "       1, 4, 3, 4, 3, 4, 1, 2, 4, 2, 2, 1, 2, 2, 2, 1, 3, 3, 4, 4, 4, 3,\n",
+       "       4, 2, 1, 4, 1, 2, 4, 4, 1, 1, 3, 2, 1, 4, 4, 2, 1, 2, 2, 3, 1, 4,\n",
+       "       1, 4, 4, 4, 3, 2, 3, 4, 1, 4, 2, 4, 1, 3, 2, 1, 1, 2, 3, 3, 3, 2,\n",
+       "       4, 1, 1, 3, 1, 4, 4, 3, 3, 4, 3, 3, 2, 2, 2, 4, 3, 3, 2, 4, 3, 1,\n",
+       "       1, 1, 4, 3, 2, 3, 3, 2, 2, 3, 2, 3, 2, 2, 1, 3, 2, 4, 1, 3, 1, 4,\n",
+       "       1, 3, 4, 4, 2, 2, 3, 1, 1, 1, 2, 2, 1, 3, 4, 2, 1, 1, 3, 2, 1, 1,\n",
+       "       2, 1, 3, 4, 2, 1, 4, 1, 1, 1, 1, 3, 4, 4, 4, 4, 3, 2, 4, 1, 1, 3,\n",
+       "       4, 3, 4, 1, 1, 4, 4, 1, 2, 3, 2, 2, 3, 2, 1, 3, 4, 4, 2, 2, 1, 2,\n",
+       "       1, 3, 3, 3, 1, 1, 3, 4, 4, 4, 2, 2, 3, 2, 1, 3, 2, 2, 1, 3, 1, 2,\n",
+       "       1, 4, 4, 1, 2, 4, 2, 4, 3, 2, 4, 2, 2, 4, 3, 2, 4, 1, 3, 2, 2, 4,\n",
+       "       4, 1, 2, 1, 3, 4, 4, 3, 1, 4, 2, 1, 1, 1, 1, 2, 1, 4, 1, 4, 3, 3,\n",
+       "       3, 1, 4, 4, 3, 2, 4, 2, 4, 1, 2, 3, 2, 3, 3, 1, 2, 4, 3, 1, 3, 3,\n",
+       "       1, 3, 4, 3, 4, 3, 1, 4, 3, 1, 3, 3, 4, 3, 1, 2, 3, 3, 1, 4, 4, 2,\n",
+       "       4, 4, 1, 1, 3, 1, 2, 2, 1, 3, 3, 3, 2, 1, 1, 4, 4, 4, 1, 1, 2, 4,\n",
+       "       3, 4, 4, 1, 4, 2, 2, 3, 4, 3, 2, 3, 1, 4, 4, 2, 4, 4, 3, 4, 4, 2,\n",
+       "       1, 2, 4, 1, 1, 4, 2, 4, 1, 3, 2, 4, 2, 1, 2, 3, 2, 2, 3, 4, 2, 2,\n",
+       "       2, 3, 4, 1, 3, 3, 2, 3, 1, 1, 3, 2, 2, 4, 2, 1])"
+      ]
+     },
+     "execution_count": 19,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "predictedY"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "array([4, 2, 2, 2, 3, 1, 3, 3, 2, 3, 4, 3, 1, 2, 1, 2, 1, 3, 4, 2, 1, 2,\n",
+       "       1, 1, 3, 3, 1, 4, 4, 1, 3, 3, 1, 4, 1, 2, 3, 1, 1, 3, 1, 2, 3, 3,\n",
+       "       3, 4, 3, 2, 3, 1, 2, 3, 3, 2, 2, 2, 4, 2, 3, 1, 3, 2, 3, 3, 2, 3,\n",
+       "       2, 2, 2, 4, 2, 3, 4, 4, 4, 3, 4, 1, 2, 3, 3, 2, 4, 3, 4, 3, 2, 4,\n",
+       "       2, 2, 2, 4, 2, 3, 1, 4, 3, 2, 1, 3, 3, 1, 1, 4, 1, 4, 4, 1, 3, 2,\n",
+       "       4, 1, 4, 3, 4, 1, 4, 2, 1, 1, 1, 1, 4, 1, 2, 3, 1, 2, 1, 4, 4, 4,\n",
+       "       1, 4, 3, 4, 3, 4, 1, 2, 4, 2, 2, 1, 2, 2, 2, 1, 3, 3, 4, 4, 4, 3,\n",
+       "       4, 2, 1, 4, 1, 2, 4, 4, 1, 1, 3, 2, 1, 4, 4, 2, 1, 2, 2, 3, 1, 4,\n",
+       "       1, 4, 4, 4, 3, 2, 3, 4, 1, 4, 2, 4, 1, 3, 2, 1, 1, 2, 3, 3, 3, 2,\n",
+       "       4, 1, 1, 3, 1, 4, 4, 3, 3, 4, 3, 3, 2, 2, 2, 4, 3, 3, 2, 4, 3, 1,\n",
+       "       1, 1, 4, 3, 2, 3, 3, 2, 2, 3, 2, 3, 2, 2, 1, 3, 2, 4, 1, 3, 1, 4,\n",
+       "       1, 3, 4, 4, 2, 2, 3, 1, 1, 1, 2, 2, 1, 3, 4, 2, 1, 1, 3, 2, 1, 1,\n",
+       "       2, 1, 3, 4, 2, 1, 4, 1, 1, 1, 1, 3, 4, 4, 4, 4, 3, 2, 4, 1, 1, 3,\n",
+       "       4, 3, 4, 1, 1, 4, 4, 1, 2, 3, 2, 2, 3, 2, 1, 3, 4, 4, 2, 2, 1, 2,\n",
+       "       1, 3, 3, 3, 1, 1, 3, 4, 4, 4, 2, 2, 3, 2, 1, 3, 2, 2, 1, 3, 1, 2,\n",
+       "       1, 4, 4, 1, 2, 4, 2, 4, 3, 2, 4, 2, 2, 4, 3, 2, 4, 1, 3, 2, 2, 4,\n",
+       "       4, 1, 2, 1, 3, 4, 4, 3, 1, 4, 2, 1, 1, 1, 1, 2, 1, 4, 1, 4, 3, 3,\n",
+       "       3, 1, 4, 4, 3, 2, 4, 2, 4, 1, 2, 3, 2, 3, 3, 1, 2, 4, 3, 1, 3, 3,\n",
+       "       1, 3, 4, 3, 4, 3, 1, 4, 3, 1, 3, 3, 4, 3, 1, 2, 3, 3, 1, 4, 4, 2,\n",
+       "       4, 4, 1, 1, 3, 1, 2, 2, 1, 3, 3, 3, 2, 1, 1, 4, 4, 4, 1, 1, 2, 4,\n",
+       "       3, 4, 4, 1, 4, 2, 2, 3, 4, 3, 2, 3, 1, 4, 4, 2, 4, 4, 3, 4, 4, 2,\n",
+       "       1, 2, 4, 1, 1, 4, 2, 4, 1, 3, 2, 4, 2, 1, 2, 3, 2, 2, 3, 4, 2, 2,\n",
+       "       2, 3, 4, 1, 3, 3, 2, 3, 1, 1, 3, 2, 2, 4, 2, 1])"
+      ]
+     },
+     "execution_count": 20,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "y_data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n",
+       "       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])"
+      ]
+     },
+     "execution_count": 21,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "predictedY-y_data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "(500, 7)"
+      ]
+     },
+     "execution_count": 22,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "np.shape(X_data)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.4"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}

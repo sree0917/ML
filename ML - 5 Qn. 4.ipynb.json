@@ -1,0 +1,392 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 202,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "import os\n",
+    "import pandas\n",
+    "import seaborn as sns\n",
+    "from tqdm import tqdm\n",
+    "\n",
+    "sns.set(rc={'figure.figsize':(10,10)})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 203,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "os.chdir('/Users/sreelakshmirajendrakumar/Downloads')\n",
+    "\n",
+    "dataset_pendigits_test = pandas.read_csv('pendigits_test.csv')\n",
+    "dataset_pendigits_train = pandas.read_csv('pendigits_train.csv')\n",
+    "dataset_class_2D = pandas.read_csv('class_2D.csv')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 204,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "X_train=dataset_pendigits_train.iloc[:,0:16]\n",
+    "X_train=X_train.to_numpy()\n",
+    "N,d=np.shape(X_train)\n",
+    "\n",
+    "y_train=dataset_pendigits_train.iloc[:,16]\n",
+    "y_train=y_train.to_numpy()\n",
+    "y_train=np.array(y_train).astype(int)\n",
+    "\n",
+    "X_test=dataset_pendigits_test.iloc[:,0:16]\n",
+    "X_test=X_test.to_numpy()\n",
+    "\n",
+    "y_test=dataset_pendigits_test.iloc[:,16]\n",
+    "y_test=y_test.to_numpy()\n",
+    "y_test=np.array(y_test).astype(int)\n",
+    "\n",
+    "gamma_zero=10"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 205,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "X_train_sorted=[]\n",
+    "for i in range(0,10):\n",
+    "    X_train_sorted.append([]) #(10,) (589,16)\n",
+    "    for j in range(0,len(X_train)):\n",
+    "        if y_train[j]==i:\n",
+    "            X_train_sorted[i].append(X_train[j])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 206,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def generateDiagonalY(y_,N):\n",
+    "    'creating a matrix with diagonal values equal to the elements in y'\n",
+    "    diagonal_y=np.zeros((N,N))\n",
+    "    for i in range(0,len(diagonal_y)):\n",
+    "        for j in range(0,len(diagonal_y)):\n",
+    "            if i==j:\n",
+    "                diagonal_y[i][j]=y_[i]\n",
+    "    return diagonal_y\n",
+    "\n",
+    "def changeY(to_change_y,c):\n",
+    "    '''changing y such that the samples belonging to the class under consideration has y=1 and others have y=-1'''\n",
+    "    changed_y=np.zeros(len(to_change_y),)\n",
+    "    for i in range(0,len(to_change_y)):\n",
+    "        if to_change_y[i]!=c:\n",
+    "            changed_y[i]=-1\n",
+    "        elif to_change_y[i]==c:\n",
+    "            changed_y[i]=1\n",
+    "    return changed_y\n",
+    "\n",
+    "\n",
+    "changed_y=[] # (10,589)\n",
+    "for i in range(0,10):\n",
+    "    changed_y.append(changeY(y_train,i))\n",
+    "\n",
+    "diagonal_y=[] # (10,589,589) \n",
+    "for i in range(0,10):\n",
+    "    diagonal_y.append([])\n",
+    "    diagonal_y[i]=generateDiagonalY(changed_y[i],N)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 207,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def numPos(array):\n",
+    "    w=0\n",
+    "    for i in range(0,len(array)):\n",
+    "        if array[i]>0:\n",
+    "            w+=1\n",
+    "    return w\n",
+    "\n",
+    "'''getting the number of elements belonging to each class'''\n",
+    "N_class=[] # (10,)\n",
+    "for i in range(0,10):\n",
+    "    N_class.append(numPos(changed_y[i]))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 208,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def attachOnes(X=X_train):\n",
+    "    'attaching ones to the first column of the input matrix X'\n",
+    "    to_attach=np.zeros((len(X),1))\n",
+    "    to_attach+=1\n",
+    "    attached=np.concatenate((to_attach,X),axis=1)\n",
+    "    return attached\n",
+    "\n",
+    "attached_x=attachOnes()\n",
+    "A=[]\n",
+    "W=[]\n",
+    "for i in range(0,10):\n",
+    "    A.append(np.matmul(diagonal_y[i],attached_x)) #(10, 589, 17)\n",
+    "    W.append(np.matmul(diagonal_y[i],X_train)) # (10, 589, 16)\n",
+    "    "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 209,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "'''getting gamma'''\n",
+    "gamma=np.zeros(len(y_train),)\n",
+    "for j in range(0,len(y_train)):\n",
+    "    for i in range(0,10):\n",
+    "        if y_train[j]==i:\n",
+    "            temp=10*len(y_train)/N_class[i]\n",
+    "            gamma[j]=temp"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 210,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def getU(the_z,gamma=gamma):\n",
+    "    u=np.zeros(len(gamma),)\n",
+    "    for i in range(0,len(u)):\n",
+    "        if the_z[i]<1:\n",
+    "            u[i]=(-1)*gamma[i]\n",
+    "    return u"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 246,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      "  0%|          | 0/10 [00:00<?, ?it/s]\u001b[A\n",
+      " 10%|█         | 1/10 [00:03<00:35,  3.96s/it]\u001b[A\n",
+      " 20%|██        | 2/10 [00:07<00:31,  3.98s/it]\u001b[A\n",
+      " 30%|███       | 3/10 [00:11<00:27,  3.94s/it]\u001b[A\n",
+      " 40%|████      | 4/10 [00:15<00:23,  3.91s/it]\u001b[A\n",
+      " 50%|█████     | 5/10 [00:19<00:19,  3.89s/it]\u001b[A\n",
+      " 60%|██████    | 6/10 [00:23<00:15,  3.93s/it]\u001b[A\n",
+      " 70%|███████   | 7/10 [00:27<00:11,  3.94s/it]\u001b[A\n",
+      " 80%|████████  | 8/10 [00:31<00:07,  3.99s/it]\u001b[A\n",
+      " 90%|█████████ | 9/10 [00:38<00:04,  4.77s/it]\u001b[A\n",
+      "100%|██████████| 10/10 [00:43<00:00,  4.37s/it]\u001b[A\n"
+     ]
+    }
+   ],
+   "source": [
+    "initial_beta_zero=[]\n",
+    "initial_b=[]\n",
+    "initial_z=[]\n",
+    "initial_u=[]\n",
+    "\n",
+    "temp_beta_zero=[]\n",
+    "temp_b=[]\n",
+    "temp_z=[]\n",
+    "temp_u=[]\n",
+    "\n",
+    "current_beta_zero=[] # (10,)\n",
+    "current_b=[] # (10,16)\n",
+    "current_z=[] # (10,589)\n",
+    "current_u=[] # (10,589)\n",
+    "\n",
+    "rho=0.02\n",
+    "tolerance=10**(-5)\n",
+    "\n",
+    "for i in range(0,10):\n",
+    "    '''initializing the values'''\n",
+    "    initial_beta_zero.append(np.random.rand(1,))\n",
+    "    initial_b.append(np.random.rand(d,))\n",
+    "    initial_z.append(np.random.rand(N,))\n",
+    "    initial_u.append(np.random.rand(N,))\n",
+    "\n",
+    "    temp_beta_zero.append(np.zeros(1,))\n",
+    "    temp_b.append(np.zeros((N,d)))\n",
+    "    temp_z.append(np.zeros(N,))\n",
+    "    temp_u.append(np.zeros(N,))\n",
+    "\n",
+    "    current_beta_zero.append(initial_beta_zero[i])\n",
+    "    current_b.append(initial_b[i])\n",
+    "    current_z.append(initial_z[i])\n",
+    "    current_u.append(initial_u[i])\n",
+    "    \n",
+    "    \n",
+    "\n",
+    "    \n",
+    "for i in tqdm(range(0,10)):\n",
+    "    temp1=0;temp2=0;temp3=0;temp4=0;temp5=0;temp6=0;temp7=0\n",
+    "    for j in range(0,10000):\n",
+    "        temp_beta_zero[i]=current_beta_zero[i]\n",
+    "        temp1=current_z[i]-current_u[i]-np.matmul(W[i],current_b[i])\n",
+    "        current_beta_zero[i]=(np.matmul(changed_y[i].T,temp1)/(np.matmul(changed_y[i].T,changed_y[i])))\n",
+    "    \n",
+    "        temp_b[i]=current_b[i]\n",
+    "        temp2=rho*np.identity(d)+np.matmul(W[i].T,W[i])\n",
+    "        temp3=np.linalg.inv(temp2)\n",
+    "        temp4=current_z[i]-current_u[i]-current_beta_zero[i]*changed_y[i]\n",
+    "        temp5=np.matmul(temp3,W[i].T)\n",
+    "        current_b[i]=np.matmul(temp5,temp4)\n",
+    "    \n",
+    "        temp_z[i]=current_z[i]\n",
+    "        temp6=getU(temp_z[i],gamma)\n",
+    "        current_z[i]=-rho*temp6+(changed_y[i]*current_beta_zero[i])+np.matmul(W[i],current_b[i])+current_u[i]\n",
+    "    \n",
+    "        temp_u[i]=current_u[i]\n",
+    "        temp7=temp_u[i]+(changed_y[i]*current_beta_zero[i])+np.matmul(W[i],current_b[i])-current_z[i]\n",
+    "        current_u[i]=temp7\n",
+    "    \n",
+    "#     if abs(temp_beta_zero[i]-current_beta_zero[i])<tolerance:\n",
+    "#         temp8=abs(temp_b[i]-current_b[i])\n",
+    "#         if np.all(temp8<tolerance):\n",
+    "#             break"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 267,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def getScore(beta_zero,b,X):\n",
+    "    for i in range(0,len(X)):\n",
+    "        c=beta_zero+np.matmul(X.T,b)\n",
+    "    return c"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 268,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "assigned_classes=[]\n",
+    "for j in range(0,len(X_test)):\n",
+    "    temp_array=[]\n",
+    "    for i in range(0,10):\n",
+    "        temp_value=getScore(current_beta_zero[i],current_b[i],X_test[j])\n",
+    "        temp_array.append(temp_value)\n",
+    "    assigned_classes.append(np.argmax(temp_array))    \n",
+    "    \n",
+    "    "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 276,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "array([[70,  0,  0,  0,  2,  0,  0,  0,  2,  2],\n",
+       "       [ 0, 81,  2,  1,  0,  0,  0,  1,  1,  5],\n",
+       "       [ 0,  1, 87,  0,  0,  0,  0,  0,  0,  0],\n",
+       "       [ 0,  1,  1, 81,  0,  0,  0,  0,  0,  2],\n",
+       "       [ 2,  1,  0,  0, 97,  0,  2,  0,  0,  1],\n",
+       "       [ 1,  2,  1,  0,  0, 78,  0,  1,  4, 11],\n",
+       "       [ 0,  0,  0,  0,  0,  0, 68,  1,  0,  0],\n",
+       "       [ 0,  0,  0,  0,  0,  0,  0, 80,  0,  1],\n",
+       "       [ 3,  0,  0,  0,  0,  2,  1,  0, 63,  0],\n",
+       "       [ 0,  0,  0,  0,  0,  2,  0,  0,  0, 73]])"
+      ]
+     },
+     "execution_count": 276,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "import sklearn\n",
+    "from sklearn.metrics import confusion_matrix\n",
+    "\n",
+    "sklearn.metrics.confusion_matrix(assigned_classes,y_test, labels=None, sample_weight=None)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 278,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "changed_test_y=[] # (10,589)\n",
+    "for i in range(0,10):\n",
+    "    changed_test_y.append(changeY(y_test,i))\n",
+    "    \n",
+    "N_test_class=[] # (10,)\n",
+    "for i in range(0,10):\n",
+    "    N_test_class.append(numPos(changed_test_y[i]))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 279,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "[76, 86, 91, 82, 99, 82, 71, 83, 70, 95]"
+      ]
+     },
+     "execution_count": 279,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "N_test_class"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.4"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
